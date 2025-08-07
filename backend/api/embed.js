@@ -1,49 +1,72 @@
 // backend/api/embed.js
-import { R2Service } from '../lib/r2.js';
+import { getEmbedData } from '../lib/r2.js';
 
 export default async function handler(req, res) {
+  // 設定 CORS - 允許嵌入到任何網站
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  // 設置快取
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
-  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
-  const { folderId } = req.query;
-  
-  if (!folderId) {
-    return res.status(400).json({ error: '需要資料夾 ID' });
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ 
+      error: `Method ${req.method} not allowed` 
+    });
   }
-  
+
   try {
-    // 並行獲取資料夾和媒體資料
-    const [folder, mediaList] = await Promise.all([
-      R2Service.getFolder(folderId),
-      R2Service.getMedia(folderId)
-    ]);
+    const { folderId } = req.query;
     
-    if (!folder) {
-      return res.status(404).json({ error: '資料夾不存在' });
+    if (!folderId) {
+      return res.status(400).json({ 
+        error: 'folderId is required' 
+      });
     }
+
+    // 獲取資料夾的嵌入資料
+    const embedData = await getEmbedData(folderId);
     
-    // 記錄瀏覽次數（可選）
-    if (folder.views !== undefined) {
-      folder.views = (folder.views || 0) + 1;
-      // 異步更新，不影響響應速度
-      R2Service.saveFolder(folderId, folder).catch(console.error);
+    if (!embedData) {
+      return res.status(404).json({ 
+        error: 'Folder not found' 
+      });
     }
-    
-    return res.json({
-      folder,
-      mediaList: mediaList || [],
-      settings: folder.settings || {}
+
+    // 返回嵌入所需的資料
+    return res.status(200).json({
+      folderId: embedData.folderId,
+      displayName: embedData.displayName,
+      media: embedData.media.map(item => ({
+        id: item.id,
+        type: item.type,
+        mediaUrl: item.mediaUrl,
+        thumbnailUrl: item.thumbnailUrl,
+        caption: item.caption,
+        username: item.username,
+        originalUrl: item.url,
+        timestamp: item.timestamp
+      })),
+      totalItems: embedData.media.length,
+      lastUpdated: embedData.lastUpdated || new Date().toISOString()
     });
   } catch (error) {
-    console.error('Embed API error:', error);
-    res.status(500).json({ error: '載入失敗' });
+    console.error('Embed API Error:', error);
+    
+    // 如果是找不到資料夾的錯誤
+    if (error.message && error.message.includes('not found')) {
+      return res.status(404).json({ 
+        error: 'Folder not found',
+        message: error.message 
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
   }
 }

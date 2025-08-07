@@ -1,117 +1,107 @@
 // backend/api/media.js
-import { R2Service } from '../lib/r2.js';
-import { InstagramService } from '../lib/instagram.js';
+import { uploadMedia, deleteMedia, listMediaInFolder, getMediaUrl } from '../lib/r2.js';
+import { fetchInstagramData } from '../lib/instagram.js';
 
 export default async function handler(req, res) {
+  // 設定 CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
-  const { folderId } = req.query;
-  
-  if (!folderId) {
-    return res.status(400).json({ error: '需要資料夾 ID' });
-  }
-  
+
   try {
     switch (req.method) {
-      case 'GET':
-        // 獲取媒體列表
-        const mediaList = await R2Service.getMedia(folderId);
-        return res.json({ mediaList });
-        
-      case 'POST':
-        // 添加媒體
-        const { urls, mediaData } = req.body;
-        
-        let newMedia = [];
-        
-        if (urls && Array.isArray(urls)) {
-          // 從 Instagram URLs 獲取媒體
-          newMedia = await InstagramService.getMultipleMedia(urls);
-        } else if (mediaData) {
-          // 直接添加媒體資料
-          newMedia = Array.isArray(mediaData) ? mediaData : [mediaData];
-        } else {
-          return res.status(400).json({ error: '需要提供 urls 或 mediaData' });
+      case 'GET': {
+        const { folderId } = req.query;
+        if (!folderId) {
+          return res.status(400).json({ error: 'folderId is required' });
         }
+        const media = await listMediaInFolder(folderId);
+        return res.status(200).json({ media });
+      }
+
+      case 'POST': {
+        const { url, folderId } = req.body || {};
         
-        // 獲取現有媒體
-        const currentMedia = await R2Service.getMedia(folderId);
-        
-        // 合併並去重
-        const mediaMap = new Map();
-        [...currentMedia, ...newMedia].forEach(media => {
-          mediaMap.set(media.mediaId || media.url, media);
-        });
-        
-        const updatedMedia = Array.from(mediaMap.values());
-        
-        // 保存更新後的媒體列表
-        await R2Service.saveMedia(folderId, updatedMedia);
-        
-        // 更新資料夾的媒體數量
-        const folder = await R2Service.getFolder(folderId);
-        if (folder) {
-          folder.mediaCount = updatedMedia.length;
-          folder.updatedAt = new Date().toISOString();
-          await R2Service.saveFolder(folderId, folder);
+        if (!url || !folderId) {
+          return res.status(400).json({ 
+            error: 'URL and folderId are required' 
+          });
         }
-        
-        return res.json({ 
-          success: true, 
-          added: newMedia.length,
-          total: updatedMedia.length 
-        });
-        
-      case 'PUT':
-        // 更新媒體資訊
-        const { mediaId } = req.query;
-        const updateInfo = req.body;
-        
-        const media = await R2Service.getMedia(folderId);
-        const index = media.findIndex(m => m.mediaId === mediaId);
-        
-        if (index === -1) {
-          return res.status(404).json({ error: '媒體不存在' });
+
+        try {
+          // 獲取 Instagram 資料
+          console.log('Fetching Instagram data for:', url);
+          const igData = await fetchInstagramData(url);
+          
+          if (!igData.videoUrl && !igData.imageUrl) {
+            return res.status(400).json({ 
+              error: 'No media found in the Instagram post' 
+            });
+          }
+
+          // 準備媒體資料
+          const mediaData = {
+            url: url,
+            type: igData.videoUrl ? 'video' : 'image',
+            mediaUrl: igData.videoUrl || igData.imageUrl,
+            thumbnailUrl: igData.thumbnailUrl || igData.imageUrl,
+            caption: igData.caption || '',
+            username: igData.username || '',
+            timestamp: new Date().toISOString()
+          };
+
+          // 上傳到 R2
+          const uploadedMedia = await uploadMedia(folderId, mediaData);
+          
+          return res.status(201).json({ 
+            media: uploadedMedia,
+            success: true 
+          });
+        } catch (error) {
+          console.error('Media processing error:', error);
+          return res.status(500).json({ 
+            error: 'Failed to process media',
+            message: error.message 
+          });
         }
+      }
+
+      case 'DELETE': {
+        const { folderId, mediaId } = req.query;
         
-        media[index] = { ...media[index], ...updateInfo };
-        await R2Service.saveMedia(folderId, media);
-        
-        return res.json({ success: true, media: media[index] });
-        
-      case 'DELETE':
-        // 刪除媒體
-        const { mediaIds } = req.body;
-        const deleteIds = Array.isArray(mediaIds) ? mediaIds : [mediaIds];
-        
-        const currentMediaList = await R2Service.getMedia(folderId);
-        const filteredMedia = currentMediaList.filter(
-          m => !deleteIds.includes(m.mediaId)
-        );
-        
-        await R2Service.saveMedia(folderId, filteredMedia);
-        
-        // 更新資料夾媒體數量
-        const folderInfo = await R2Service.getFolder(folderId);
-        if (folderInfo) {
-          folderInfo.mediaCount = filteredMedia.length;
-          folderInfo.updatedAt = new Date().toISOString();
-          await R2Service.saveFolder(folderId, folderInfo);
+        if (!folderId || !mediaId) {
+          return res.status(400).json({ 
+            error: 'folderId and mediaId are required' 
+          });
         }
-        
-        return res.json({ success: true, remaining: filteredMedia.length });
-        
+
+        try {
+          await deleteMedia(folderId, mediaId);
+          return res.status(200).json({ success: true });
+        } catch (error) {
+          console.error('Delete media error:', error);
+          return res.status(500).json({ 
+            error: 'Failed to delete media',
+            message: error.message 
+          });
+        }
+      }
+
       default:
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ 
+          error: `Method ${req.method} not allowed` 
+        });
     }
   } catch (error) {
-    console.error('Media API error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('API Error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
   }
 }
