@@ -1,90 +1,50 @@
 // backend/api/folder.js
-import { R2Service } from '../lib/r2.js';
-import { v4 as uuidv4 } from 'uuid';
+import { listFolders, createFolder, deleteFolder } from '../lib/r2.js';
 
 export default async function handler(req, res) {
+  // 設定 CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
+
   try {
     switch (req.method) {
-      case 'GET':
-        // 獲取所有資料夾
-        const folders = await R2Service.getAllFolders();
-        return res.json({ folders });
-        
-      case 'POST':
-        // 創建新資料夾
-        const { name, settings = {} } = req.body;
-        
-        if (!name) {
-          return res.status(400).json({ error: '資料夾名稱必填' });
+      case 'GET': {
+        const folders = await listFolders();
+        return res.status(200).json({ folders });
+      }
+
+      case 'POST': {
+        const { name, displayName } = req.body || {};
+        if (!name || !displayName) {
+          return res.status(400).json({ error: 'Name and displayName are required' });
         }
-        
-        const folderId = uuidv4();
-        const folderData = {
-          id: folderId,
-          name,
-          settings: {
-            layout: 'grid',
-            columns: 3,
-            mobileColumns: 2,
-            spacing: 10,
-            showOverlay: true,
-            clickAction: 'lightbox',
-            autoplay: false,
-            autoplaySpeed: 3000,
-            ...settings
-          },
-          createdAt: new Date().toISOString(),
-          mediaCount: 0
-        };
-        
-        await R2Service.saveFolder(folderId, folderData);
-        await R2Service.saveMedia(folderId, []); // 初始化空媒體列表
-        
-        return res.json({ folder: folderData });
-        
-      case 'PUT':
-        // 更新資料夾設定
+        const folder = await createFolder(name, displayName);
+        return res.status(201).json({ folder });
+      }
+
+      case 'DELETE': {
         const { folderId } = req.query;
-        const updateData = req.body;
-        
-        const folder = await R2Service.getFolder(folderId);
-        if (!folder) {
-          return res.status(404).json({ error: '資料夾不存在' });
+        if (!folderId) {
+          return res.status(400).json({ error: 'folderId is required' });
         }
-        
-        const updatedFolder = {
-          ...folder,
-          ...updateData,
-          settings: { ...folder.settings, ...(updateData.settings || {}) },
-          updatedAt: new Date().toISOString()
-        };
-        
-        await R2Service.saveFolder(folderId, updatedFolder);
-        
-        return res.json({ folder: updatedFolder });
-        
-      case 'DELETE':
-        // 刪除資料夾
-        const { folderId: deleteId } = req.query;
-        
-        await R2Service.deleteObject(`folders/${deleteId}/config.json`);
-        await R2Service.deleteObject(`folders/${deleteId}/media.json`);
-        
-        return res.json({ success: true });
-        
+        await deleteFolder(folderId);
+        return res.status(200).json({ success: true });
+      }
+
       default:
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: `Method ${req.method} not allowed` });
     }
   } catch (error) {
-    console.error('Folder API error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('API Error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
   }
 }
