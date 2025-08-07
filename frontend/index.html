@@ -1,0 +1,195 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IG Reels 嵌入系統 - 管理介面</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 頂部導航 -->
+        <header class="header">
+            <div class="container">
+                <h1>IG Reels 嵌入系統</h1>
+                <nav>
+                    <button class="nav-btn active" data-tab="folders">資料夾管理</button>
+                    <button class="nav-btn" data-tab="help">使用說明</button>
+                </nav>
+            </div>
+        </header>
+        
+        <!-- 主要內容 -->
+        <main class="main-content">
+            <div class="container">
+                <!-- 資料夾管理標籤 -->
+                <div class="tab-content active" id="folders-tab">
+                    <!-- 創建資料夾 -->
+                    <section class="card">
+                        <h2>創建新資料夾</h2>
+                        <form id="create-folder-form" class="form-inline">
+                            <input 
+                                type="text" 
+                                id="folder-name" 
+                                placeholder="輸入資料夾名稱" 
+                                required
+                                class="form-input"
+                            >
+                            <button type="submit" class="btn btn-primary">
+                                創建資料夾
+                            </button>
+                        </form>
+                    </section>
+                    
+                    <!-- 資料夾列表 -->
+                    <section class="card">
+                        <h2>我的資料夾</h2>
+                        <div id="folders-list" class="folders-grid">
+                            <div class="loading">載入中...</div>
+                        </div>
+                    </section>
+                </div>
+                
+                <!-- 使用說明標籤 -->
+                <div class="tab-content" id="help-tab">
+                    <section class="card">
+                        <h2>使用說明</h2>
+                        <div class="help-content">
+                            <h3>1. 創建資料夾</h3>
+                            <p>點擊「創建資料夾」按鈕，輸入名稱即可創建新的媒體資料夾。</p>
+                            
+                            <h3>2. 添加媒體</h3>
+                            <p>在資料夾中添加 Instagram 貼文、Reels 或 IGTV 的連結。</p>
+                            <p>支援的連結格式：</p>
+                            <ul>
+                                <li>https://www.instagram.com/p/xxxxx/</li>
+                                <li>https://www.instagram.com/reel/xxxxx/</li>
+                                <li>https://www.instagram.com/tv/xxxxx/</li>
+                            </ul>
+                            
+                            <h3>3. 嵌入到網站</h3>
+                            <p>複製生成的嵌入代碼，貼到你的網站 HTML 中即可。</p>
+                            
+                            <h3>4. 自訂樣式</h3>
+                            <p>可以調整佈局、間距、顏色等設定，打造符合品牌風格的展示效果。</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+        
+        <!-- 媒體管理模態框 -->
+        <div class="modal" id="media-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>媒體管理 - <span id="modal-folder-name"></span></h2>
+                    <button class="close-btn" onclick="closeMediaModal()">×</button>
+                </div>
+                
+                <div class="modal-body">
+                    <!-- 添加媒體 -->
+                    <div class="section">
+                        <h3>添加 Instagram 媒體</h3>
+                        <div class="add-media-form">
+                            <textarea 
+                                id="media-urls" 
+                                placeholder="貼上 Instagram 連結（每行一個）"
+                                rows="4"
+                                class="form-textarea"
+                            ></textarea>
+                            <button onclick="addMedia()" class="btn btn-primary">
+                                添加媒體
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 設定 -->
+                    <div class="section">
+                        <h3>顯示設定</h3>
+                        <div class="settings-grid">
+                            <div class="setting-group">
+                                <label>佈局方式</label>
+                                <select id="layout-select" class="form-select">
+                                    <option value="grid">網格</option>
+                                    <option value="slider">輪播</option>
+                                    <option value="masonry">瀑布流</option>
+                                </select>
+                            </div>
+                            
+                            <div class="setting-group">
+                                <label>桌面欄數</label>
+                                <input type="number" id="columns" min="1" max="6" value="3" class="form-input">
+                            </div>
+                            
+                            <div class="setting-group">
+                                <label>手機欄數</label>
+                                <input type="number" id="mobile-columns" min="1" max="3" value="2" class="form-input">
+                            </div>
+                            
+                            <div class="setting-group">
+                                <label>間距 (px)</label>
+                                <input type="number" id="spacing" min="0" max="50" value="10" class="form-input">
+                            </div>
+                            
+                            <div class="setting-group">
+                                <label>點擊行為</label>
+                                <select id="click-action" class="form-select">
+                                    <option value="lightbox">燈箱顯示</option>
+                                    <option value="instagram">跳轉 Instagram</option>
+                                    <option value="none">無動作</option>
+                                </select>
+                            </div>
+                            
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="show-overlay" checked>
+                                    顯示作者資訊
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button onclick="saveSettings()" class="btn btn-secondary">
+                            保存設定
+                        </button>
+                    </div>
+                    
+                    <!-- 媒體列表 -->
+                    <div class="section">
+                        <h3>媒體列表 (<span id="media-count">0</span>)</h3>
+                        <div id="media-list" class="media-grid">
+                            <div class="loading">載入中...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 嵌入代碼 -->
+                    <div class="section">
+                        <h3>嵌入代碼</h3>
+                        <div class="embed-code-wrapper">
+                            <textarea 
+                                id="embed-code" 
+                                readonly 
+                                class="form-textarea code"
+                                rows="6"
+                            ></textarea>
+                            <button onclick="copyEmbedCode()" class="btn btn-primary">
+                                複製代碼
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 預覽 -->
+                    <div class="section">
+                        <h3>預覽效果</h3>
+                        <div class="preview-wrapper">
+                            <iframe id="preview-frame" frameborder="0"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/admin.js"></script>
+</body>
+</html>
