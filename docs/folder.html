@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料夾內容 - IG Reels 嵌入管理系統</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>資料夾內容</h1>
+            <nav>
+                <a href="index.html" class="btn btn-secondary">← 返回資料夾列表</a>
+            </nav>
+        </header>
+
+        <main>
+            <!-- 資料夾資訊 -->
+            <section class="folder-info">
+                <h2 id="folderDisplayName">載入中...</h2>
+                <p>資料夾 ID: <span id="folderId"></span></p>
+                <div class="folder-actions">
+                    <button onclick="getEmbedCode()" class="btn btn-primary">獲取嵌入代碼</button>
+                    <button onclick="previewEmbed()" class="btn btn-secondary">預覽</button>
+                </div>
+            </section>
+
+            <!-- 新增媒體 -->
+            <section class="add-media-section">
+                <h3>新增 Instagram 內容</h3>
+                <div class="form-group">
+                    <input 
+                        type="url" 
+                        id="instagramUrl" 
+                        placeholder="貼上 Instagram Reels 或 Post 連結" 
+                        required
+                    >
+                    <button id="addMediaBtn" class="btn btn-primary">新增</button>
+                </div>
+                <p class="help-text">支援格式: instagram.com/p/xxx, instagram.com/reel/xxx</p>
+            </section>
+
+            <!-- 媒體列表 -->
+            <section class="media-section">
+                <h3>媒體內容</h3>
+                <div id="mediaList" class="media-grid">
+                    <div class="loading">載入中...</div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 IG Reels 嵌入系統 by DK0124</p>
+        </footer>
+    </div>
+
+    <!-- 訊息提示 -->
+    <div id="messageContainer"></div>
+
+    <!-- 彈窗容器 -->
+    <div id="modalContainer"></div>
+
+    <script src="js/folder.js"></script>
+</body>
+</html>
