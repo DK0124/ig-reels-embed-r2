@@ -1,370 +1,131 @@
-// frontend/js/embed.js
-const API_URL = 'https://ig-reels-embed-r2.vercel.app/api'; // 替換成你的 Vercel URL
+// docs/js/embed.js
+const API_URL = 'https://ig-reels-embed-r2.vercel.app/api';
 
-class IGReelsEmbed {
-    constructor() {
-        this.container = document.getElementById('embedContainer');
-        this.lightbox = document.getElementById('lightbox');
-        this.lightboxBody = document.getElementById('lightboxBody');
-        this.folderId = null;
-        this.folder = null;
-        this.mediaList = [];
-        this.settings = {};
-        this.currentSlideIndex = 0;
-        this.autoplayInterval = null;
-        
-        this.init();
+// 從 URL 獲取資料夾 ID
+function getFolderIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('folderId');
+}
+
+// 載入並顯示媒體
+async function loadEmbedContent() {
+    const folderId = getFolderIdFromUrl();
+    
+    if (!folderId) {
+        displayError('Missing folder ID');
+        return;
     }
     
-    async init() {
-        // 獲取 URL 參數
-        const params = new URLSearchParams(window.location.search);
-        this.folderId = params.get('folderId');
+    try {
+        const response = await fetch(`${API_URL}/embed?folderId=${folderId}`);
+        const data = await response.json();
         
-        if (!this.folderId) {
-            this.showError('未指定資料夾 ID');
-            return;
-        }
-        
-        // 載入資料
-        await this.loadData();
-        
-        // 監聽視窗大小變化
-        window.addEventListener('resize', () => this.handleResize());
-        
-        // 監聽鍵盤事件
-        document.addEventListener('keydown', (e) => this.handleKeyPress(e));
-    }
-    
-    async loadData() {
-        try {
-            const response = await fetch(`${API_URL}/embed?folderId=${this.folderId}`);
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || '載入失敗');
-            }
-            
-            this.folder = data.folder;
-            this.mediaList = data.mediaList;
-            this.settings = data.settings || {};
-            
-            // 渲染內容
-            this.render();
-            
-            // 通知父視窗
-            this.notifyParent('loaded', {
-                folderId: this.folderId,
-                mediaCount: this.mediaList.length
-            });
-        } catch (error) {
-            this.showError('載入失敗: ' + error.message);
-        }
-    }
-    
-    render() {
-        const layout = this.settings.layout || 'grid';
-        const columns = this.getColumnCount();
-        
-        let html = '';
-        
-        switch (layout) {
-            case 'slider':
-                html = this.renderSlider();
-                break;
-            case 'masonry':
-                html = this.renderMasonry();
-                break;
-            case 'grid':
-            default:
-                html = this.renderGrid(columns);
-                break;
-        }
-        
-        this.container.innerHTML = html;
-        
-        // 設定事件監聽
-        this.setupEventListeners();
-        
-        // 通知父視窗高度變化
-        this.notifyHeightChange();
-        
-        // 啟動自動播放（如果是 slider）
-        if (layout === 'slider' && this.settings.autoplay) {
-            this.startAutoplay();
-        }
-    }
-    
-    renderGrid(columns) {
-        const spacing = this.settings.spacing || 10;
-        
-        return `
-            <div class="layout-grid" style="grid-template-columns: repeat(${columns}, 1fr); gap: ${spacing}px;">
-                ${this.mediaList.map((media, index) => this.renderMediaItem(media, index)).join('')}
-            </div>
-        `;
-    }
-    
-    renderSlider() {
-        return `
-            <div class="layout-slider">
-                <div class="slider-track" id="sliderTrack">
-                    ${this.mediaList.map((media, index) => `
-                        <div class="slider-item">
-                            ${this.renderMediaItem(media, index)}
-                        </div>
-                    `).join('')}
-                </div>
-                ${this.mediaList.length > 1 ? `
-                    <div class="slider-controls">
-                        <button class="slider-btn" onclick="embed.prevSlide()">‹</button>
-                        <button class="slider-btn" onclick="embed.nextSlide()">›</button>
-                    </div>
-                    <div class="slider-dots">
-                        ${this.mediaList.map((_, index) => `
-                            <span class="dot ${index === 0 ? 'active' : ''}" onclick="embed.goToSlide(${index})"></span>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    renderMasonry() {
-        const spacing = this.settings.spacing || 10;
-        
-        return `
-            <div class="layout-masonry" style="column-gap: ${spacing}px;">
-                ${this.mediaList.map((media, index) => `
-                    <div class="masonry-item">
-                        ${this.renderMediaItem(media, index)}
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-    
-    renderMediaItem(media, index) {
-        const showOverlay = this.settings.showOverlay !== false;
-        const thumbnailUrl = media.thumbnailUrl || '/placeholder.jpg';
-        
-        return `
-            <div class="media-item" data-index="${index}">
-                <img 
-                    src="${thumbnailUrl}" 
-                    alt="${this.escapeHtml(media.title || '')}" 
-                    loading="lazy"
-                    onerror="this.src='/placeholder.jpg'"
-                >
-                ${showOverlay ? `
-                    <div class="media-overlay">
-                        <div class="author-info">
-                            <div class="author-avatar">
-                                ${media.authorName ? media.authorName.charAt(0).toUpperCase() : 'IG'}
-                            </div>
-                            <div class="author-name">@${media.authorName || 'instagram'}</div>
-                        </div>
-                        ${media.title ? `<div class="media-caption">${this.escapeHtml(media.title)}</div>` : ''}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    setupEventListeners() {
-        // 點擊事件
-        document.querySelectorAll('.media-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const index = parseInt(item.dataset.index);
-                this.handleMediaClick(index);
-            });
-        });
-        
-        // 燈箱關閉
-        this.lightbox.addEventListener('click', (e) => {
-            if (e.target === this.lightbox) {
-                this.closeLightbox();
-            }
-        });
-    }
-    
-    handleMediaClick(index) {
-        const media = this.mediaList[index];
-        if (!media) return;
-        
-        // 發送點擊事件到父視窗
-        this.notifyParent('mediaClick', {
-            media: media,
-            index: index,
-            folderId: this.folderId
-        });
-        
-        // 執行點擊動作
-        switch (this.settings.clickAction) {
-            case 'instagram':
-                window.open(media.url, '_blank');
-                break;
-            case 'none':
-                // 無動作
-                break;
-            case 'lightbox':
-            default:
-                this.openLightbox(media);
-                break;
-        }
-    }
-    
-    openLightbox(media) {
-        // 如果有 oEmbed HTML，使用它
-        if (media.html) {
-            this.lightboxBody.innerHTML = media.html;
+        if (response.ok) {
+            displayEmbedData(data);
         } else {
-            // 否則使用 iframe
-            this.lightboxBody.innerHTML = `
-                <iframe 
-                    src="${media.url}embed" 
-                    frameborder="0" 
-                    scrolling="no" 
-                    allowtransparency="true"
-                    allow="autoplay; fullscreen"
-                ></iframe>
-            `;
+            displayError(data.error || 'Failed to load content');
         }
-        
-        this.lightbox.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-    
-    closeLightbox() {
-        this.lightbox.classList.remove('active');
-        this.lightboxBody.innerHTML = '';
-        document.body.style.overflow = '';
-    }
-    
-    // Slider 控制
-    prevSlide() {
-        this.currentSlideIndex = Math.max(0, this.currentSlideIndex - 1);
-        this.updateSlider();
-    }
-    
-    nextSlide() {
-        this.currentSlideIndex = Math.min(this.mediaList.length - 1, this.currentSlideIndex + 1);
-        this.updateSlider();
-    }
-    
-    goToSlide(index) {
-        this.currentSlideIndex = index;
-        this.updateSlider();
-    }
-    
-    updateSlider() {
-        const track = document.getElementById('sliderTrack');
-        if (track) {
-            track.style.transform = `translateX(-${this.currentSlideIndex * 100}%)`;
-            
-            // 更新點點
-            document.querySelectorAll('.dot').forEach((dot, index) => {
-                dot.classList.toggle('active', index === this.currentSlideIndex);
-            });
-        }
-    }
-    
-    startAutoplay() {
-        if (this.autoplayInterval) {
-            clearInterval(this.autoplayInterval);
-        }
-        
-        this.autoplayInterval = setInterval(() => {
-            if (this.currentSlideIndex >= this.mediaList.length - 1) {
-                this.currentSlideIndex = 0;
-            } else {
-                this.currentSlideIndex++;
-            }
-            this.updateSlider();
-        }, this.settings.autoplaySpeed || 3000);
-    }
-    
-    stopAutoplay() {
-        if (this.autoplayInterval) {
-            clearInterval(this.autoplayInterval);
-            this.autoplayInterval = null;
-        }
-    }
-    
-    // 工具方法
-    getColumnCount() {
-        const isMobile = window.innerWidth < 768;
-        return isMobile ? (this.settings.mobileColumns || 2) : (this.settings.columns || 3);
-    }
-    
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    showError(message) {
-        this.container.innerHTML = `
-            <div class="error">
-                <p>${message}</p>
-            </div>
-        `;
-    }
-    
-    // 與父視窗通訊
-    notifyParent(type, data) {
-        if (window.parent !== window) {
-            window.parent.postMessage({
-                type: type,
-                ...data
-            }, '*');
-        }
-    }
-    
-    notifyHeightChange() {
-        if (window.parent !== window) {
-            // 使用 requestAnimationFrame 確保 DOM 已更新
-            requestAnimationFrame(() => {
-                const height = document.body.scrollHeight;
-                this.notifyParent('resize', { height: height });
-            });
-        }
-    }
-    
-    handleResize() {
-        // 如果是 grid 或 masonry 佈局，需要重新渲染
-        if (this.settings.layout === 'grid' || this.settings.layout === 'masonry') {
-            const currentColumns = this.getColumnCount();
-            const container = this.container.querySelector('.layout-grid, .layout-masonry');
-            
-            if (container && this.settings.layout === 'grid') {
-                container.style.gridTemplateColumns = `repeat(${currentColumns}, 1fr)`;
-            }
-        }
-        
-        // 通知父視窗高度變化
-        this.notifyHeightChange();
-    }
-    
-    handleKeyPress(e) {
-        if (this.lightbox.classList.contains('active')) {
-            if (e.key === 'Escape') {
-                this.closeLightbox();
-            }
-        } else if (this.settings.layout === 'slider') {
-            if (e.key === 'ArrowLeft') {
-                this.prevSlide();
-            } else if (e.key === 'ArrowRight') {
-                this.nextSlide();
-            }
-        }
+    } catch (error) {
+        console.error('Error loading embed:', error);
+        displayError('Failed to load content');
     }
 }
 
-// 創建全域實例
-const embed = new IGReelsEmbed();
+// 顯示嵌入資料
+function displayEmbedData(data) {
+    // 更新標題
+    const headerElement = document.getElementById('embedHeader');
+    if (headerElement) {
+        headerElement.textContent = data.displayName || 'Instagram Collection';
+    }
+    
+    document.title = data.displayName || 'Instagram Collection';
+    
+    // 顯示媒體
+    displayMedia(data.media || []);
+}
 
-// 暴露必要的方法給 onclick 使用
-window.embed = embed;
+// 顯示媒體網格
+function displayMedia(mediaList) {
+    const container = document.getElementById('embedGrid');
+    container.innerHTML = '';
+    
+    if (!mediaList || mediaList.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ccc;">
+                <p>這個收藏夾還沒有內容</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 根據媒體數量調整佈局
+    if (mediaList.length === 1) {
+        container.className = 'embed-grid single-item';
+    } else if (mediaList.length === 2) {
+        container.className = 'embed-grid two-items';
+    } else {
+        container.className = 'embed-grid';
+    }
+    
+    mediaList.forEach((media, index) => {
+        const item = createEmbedItem(media, index);
+        container.appendChild(item);
+    });
+    
+    // 載入 Instagram 嵌入腳本
+    loadInstagramEmbed();
+}
 
-window.closeLightbox = () => embed.closeLightbox();
+// 創建嵌入項目
+function createEmbedItem(media, index) {
+    const item = document.createElement('div');
+    item.className = 'embed-item';
+    
+    // 使用 Instagram oEmbed
+    item.innerHTML = `
+        <div class="instagram-embed-wrapper" data-media-id="${media.id}">
+            ${media.embedHtml || ''}
+        </div>
+    `;
+    
+    return item;
+}
+
+// 載入 Instagram 嵌入腳本
+function loadInstagramEmbed() {
+    if (!window.instgrm) {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = '//www.instagram.com/embed.js';
+        script.onload = () => {
+            if (window.instgrm) {
+                window.instgrm.Embeds.process();
+            }
+        };
+        document.body.appendChild(script);
+    } else {
+        window.instgrm.Embeds.process();
+    }
+}
+
+// 顯示錯誤訊息
+function displayError(message) {
+    const container = document.getElementById('embedGrid');
+    container.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ff6b6b;">
+            <h2>無法載入內容</h2>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadEmbedContent();
+    
+    // 每 5 分鐘自動刷新
+    setInterval(() => {
+        loadEmbedContent();
+    }, 5 * 60 * 1000);
+});

@@ -1,5 +1,5 @@
 // backend/api/media.js
-import { uploadMedia, deleteMedia, listMediaInFolder, getMediaUrl } from '../lib/r2.js';
+import { uploadMedia, deleteMedia, listMediaInFolder } from '../lib/r2.js';
 import { fetchInstagramData } from '../lib/instagram.js';
 
 export default async function handler(req, res) {
@@ -34,24 +34,24 @@ export default async function handler(req, res) {
         }
 
         try {
-          // 獲取 Instagram 資料
-          console.log('Fetching Instagram data for:', url);
+          console.log('Processing Instagram URL:', url);
+          
+          // 獲取 Instagram oEmbed 資料
           const igData = await fetchInstagramData(url);
           
-          if (!igData.videoUrl && !igData.imageUrl) {
-            return res.status(400).json({ 
-              error: 'No media found in the Instagram post' 
-            });
-          }
-
           // 準備媒體資料
           const mediaData = {
             url: url,
-            type: igData.videoUrl ? 'video' : 'image',
-            mediaUrl: igData.videoUrl || igData.imageUrl,
-            thumbnailUrl: igData.thumbnailUrl || igData.imageUrl,
-            caption: igData.caption || '',
-            username: igData.username || '',
+            type: igData.type,
+            shortcode: igData.shortcode,
+            embedHtml: igData.embedHtml,
+            thumbnailUrl: igData.thumbnailUrl,
+            title: igData.title,
+            authorName: igData.authorName,
+            authorUrl: igData.authorUrl,
+            width: igData.width,
+            height: igData.height,
+            mediaId: igData.mediaId,
             timestamp: new Date().toISOString()
           };
 
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
         } catch (error) {
           console.error('Media processing error:', error);
           return res.status(500).json({ 
-            error: 'Failed to process media',
+            error: 'Failed to process Instagram URL',
             message: error.message 
           });
         }
