@@ -3,24 +3,32 @@ const API_URL = 'https://ig-reels-embed-r2.vercel.app/api';
 
 // 載入資料夾列表
 async function loadFolders() {
+    console.log('開始載入資料夾...');
     try {
         const response = await fetch(`${API_URL}/folder`);
+        console.log('API 回應狀態:', response.status);
+        
         const data = await response.json();
+        console.log('API 回應資料:', data);
         
         const folderList = document.getElementById('folderList');
         folderList.innerHTML = '';
         
         if (data.folders && data.folders.length > 0) {
+            console.log(`找到 ${data.folders.length} 個資料夾`);
             data.folders.forEach(folder => {
                 const folderCard = createFolderCard(folder);
                 folderList.appendChild(folderCard);
             });
         } else {
+            console.log('沒有找到資料夾');
             folderList.innerHTML = '<p class="no-folders">尚無資料夾，請新增一個開始使用。</p>';
         }
     } catch (error) {
         console.error('載入資料夾失敗:', error);
-        showMessage('載入資料夾失敗', 'error');
+        document.getElementById('folderList').innerHTML = 
+            `<p class="error">載入失敗: ${error.message}</p>`;
+        showMessage('載入資料夾失敗: ' + error.message, 'error');
     }
 }
 
@@ -32,33 +40,46 @@ async function createFolder() {
     const name = nameInput.value.trim();
     const displayName = displayNameInput.value.trim();
     
+    console.log('準備創建資料夾:', { name, displayName });
+    
     if (!name || !displayName) {
         showMessage('請填寫資料夾名稱和顯示名稱', 'error');
         return;
     }
     
+    // 驗證名稱格式
+    if (!/^[a-z0-9-]+$/.test(name)) {
+        showMessage('資料夾名稱只能使用小寫英文、數字和連字符', 'error');
+        return;
+    }
+    
     try {
-        console.log('Creating folder with:', { name, displayName }); // Debug log
+        const requestBody = {
+            name: name,
+            displayName: displayName
+        };
+        console.log('發送請求:', requestBody);
         
         const response = await fetch(`${API_URL}/folder`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                name: name,
-                displayName: displayName
-            })
+            body: JSON.stringify(requestBody)
         });
         
+        console.log('創建回應狀態:', response.status);
         const responseData = await response.json();
-        console.log('Response:', response.status, responseData); // Debug log
+        console.log('創建回應資料:', responseData);
         
         if (response.ok) {
             showMessage('資料夾創建成功', 'success');
             nameInput.value = '';
             displayNameInput.value = '';
-            loadFolders();
+            // 延遲一秒後重新載入，確保資料已儲存
+            setTimeout(() => {
+                loadFolders();
+            }, 1000);
         } else {
             throw new Error(responseData.error || '創建失敗');
         }
@@ -74,20 +95,27 @@ async function deleteFolder(folderId) {
         return;
     }
     
+    console.log('準備刪除資料夾:', folderId);
+    
     try {
         const response = await fetch(`${API_URL}/folder?folderId=${folderId}`, {
             method: 'DELETE'
         });
         
+        console.log('刪除回應狀態:', response.status);
+        
         if (response.ok) {
             showMessage('資料夾已刪除', 'success');
-            loadFolders();
+            setTimeout(() => {
+                loadFolders();
+            }, 500);
         } else {
-            throw new Error('刪除失敗');
+            const error = await response.json();
+            throw new Error(error.error || '刪除失敗');
         }
     } catch (error) {
         console.error('刪除資料夾失敗:', error);
-        showMessage('刪除失敗', 'error');
+        showMessage('刪除失敗: ' + error.message, 'error');
     }
 }
 
@@ -99,7 +127,7 @@ function createFolderCard(folder) {
         <h3>${folder.displayName}</h3>
         <p>ID: ${folder.folderId}</p>
         <p>媒體數量: ${folder.mediaCount || 0}</p>
-        <p>創建時間: ${new Date(folder.createdAt).toLocaleString()}</p>
+        <p>創建時間: ${new Date(folder.createdAt).toLocaleString('zh-TW')}</p>
         <div class="folder-actions">
             <button onclick="viewFolder('${folder.folderId}')" class="btn btn-primary">查看內容</button>
             <button onclick="getEmbedCode('${folder.folderId}')" class="btn btn-secondary">嵌入代碼</button>
@@ -111,6 +139,7 @@ function createFolderCard(folder) {
 
 // 查看資料夾內容
 function viewFolder(folderId) {
+    console.log('導航到資料夾:', folderId);
     window.location.href = `folder.html?id=${folderId}`;
 }
 
@@ -155,6 +184,8 @@ function closeModal() {
 
 // 顯示訊息
 function showMessage(message, type = 'info') {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     messageDiv.textContent = message;
@@ -167,12 +198,16 @@ function showMessage(message, type = 'info') {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('頁面載入完成，初始化中...');
     loadFolders();
     
     // 綁定創建按鈕事件
     const createBtn = document.getElementById('createFolderBtn');
     if (createBtn) {
         createBtn.addEventListener('click', createFolder);
+        console.log('創建按鈕已綁定');
+    } else {
+        console.error('找不到創建按鈕元素');
     }
     
     // Enter 鍵提交
@@ -184,4 +219,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // 每 30 秒自動刷新一次資料夾列表
+    setInterval(() => {
+        console.log('自動刷新資料夾列表...');
+        loadFolders();
+    }, 30000);
+});
+
+// 全域錯誤處理
+window.addEventListener('error', function(e) {
+    console.error('全域錯誤:', e.error);
+    showMessage('發生錯誤: ' + e.error.message, 'error');
 });
