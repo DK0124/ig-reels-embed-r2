@@ -1,5 +1,5 @@
 // backend/api/media.js
-import { uploadMedia, deleteMedia, listMediaInFolder, getMediaUrl } from '../lib/r2.js';
+import { uploadMedia, deleteMedia, listMediaInFolder } from '../lib/r2.js';
 import { fetchInstagramData } from '../lib/instagram.js';
 
 export default async function handler(req, res) {
@@ -34,28 +34,25 @@ export default async function handler(req, res) {
         }
 
         try {
-          // 獲取 Instagram 資料
-          console.log('Fetching Instagram data for:', url);
+          // 獲取 Instagram 基本資料
+          console.log('Processing Instagram URL:', url);
           const igData = await fetchInstagramData(url);
           
-          if (!igData.videoUrl && !igData.imageUrl) {
-            return res.status(400).json({ 
-              error: 'No media found in the Instagram post' 
-            });
-          }
-
-          // 準備媒體資料
+          // 準備媒體資料（不下載實際內容）
           const mediaData = {
             url: url,
-            type: igData.videoUrl ? 'video' : 'image',
-            mediaUrl: igData.videoUrl || igData.imageUrl,
-            thumbnailUrl: igData.thumbnailUrl || igData.imageUrl,
+            type: igData.type,
+            mediaUrl: igData.url, // 使用原始 Instagram URL
+            thumbnailUrl: igData.thumbnailUrl,
+            imageUrl: igData.imageUrl,
             caption: igData.caption || '',
             username: igData.username || '',
+            shortcode: igData.shortcode,
+            embedHtml: igData.embedHtml,
             timestamp: new Date().toISOString()
           };
 
-          // 上傳到 R2
+          // 上傳到 R2（只儲存元資料）
           const uploadedMedia = await uploadMedia(folderId, mediaData);
           
           return res.status(201).json({ 
