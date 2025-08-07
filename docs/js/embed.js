@@ -1,5 +1,5 @@
 // frontend/js/embed.js
-const API_URL = 'https://ig-reels-embed-r2.vercel.app//api'; // 替換成你的 Vercel URL
+const API_URL = 'https://ig-reels-embed-r2.vercel.app/api'; // 替換成你的 Vercel URL
 
 class IGReelsEmbed {
     constructor() {
