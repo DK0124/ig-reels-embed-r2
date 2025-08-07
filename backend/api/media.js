@@ -34,28 +34,25 @@ export default async function handler(req, res) {
         }
 
         try {
+          // 獲取 Instagram 基本資料
           console.log('Processing Instagram URL:', url);
-          
-          // 獲取 Instagram oEmbed 資料
           const igData = await fetchInstagramData(url);
           
-          // 準備媒體資料
+          // 準備媒體資料（不下載實際內容）
           const mediaData = {
             url: url,
             type: igData.type,
+            mediaUrl: igData.url, // 使用原始 Instagram URL
+            thumbnailUrl: igData.thumbnailUrl,
+            imageUrl: igData.imageUrl,
+            caption: igData.caption || '',
+            username: igData.username || '',
             shortcode: igData.shortcode,
             embedHtml: igData.embedHtml,
-            thumbnailUrl: igData.thumbnailUrl,
-            title: igData.title,
-            authorName: igData.authorName,
-            authorUrl: igData.authorUrl,
-            width: igData.width,
-            height: igData.height,
-            mediaId: igData.mediaId,
             timestamp: new Date().toISOString()
           };
 
-          // 上傳到 R2
+          // 上傳到 R2（只儲存元資料）
           const uploadedMedia = await uploadMedia(folderId, mediaData);
           
           return res.status(201).json({ 
@@ -65,7 +62,7 @@ export default async function handler(req, res) {
         } catch (error) {
           console.error('Media processing error:', error);
           return res.status(500).json({ 
-            error: 'Failed to process Instagram URL',
+            error: 'Failed to process media',
             message: error.message 
           });
         }

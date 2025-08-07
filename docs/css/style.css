@@ -415,6 +415,25 @@ footer {
     min-height: 500px;
 }
 
+/* Instagram 嵌入容器 */
+.instagram-embed-container {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.instagram-embed-container iframe {
+    width: 100% !important;
+}
+
+.media-preview {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .container {
