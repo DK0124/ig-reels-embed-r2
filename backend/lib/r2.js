@@ -29,6 +29,7 @@ const s3Client = new S3Client({
 
 // 列出所有資料夾
 export async function listFolders() {
+  console.log('開始列出資料夾...');
   try {
     const command = new ListObjectsV2Command({
       Bucket: R2_BUCKET_NAME,
@@ -37,9 +38,35 @@ export async function listFolders() {
     });
 
     const response = await s3Client.send(command);
+    console.log('R2 回應:', response);
+    
     const folders = [];
 
+    // 檢查 CommonPrefixes（子資料夾）
+    if (response.CommonPrefixes) {
+      console.log('找到 CommonPrefixes:', response.CommonPrefixes.length);
+      for (const prefix of response.CommonPrefixes) {
+        const folderPath = prefix.Prefix;
+        const folderId = folderPath.replace('folders/', '').replace('/', '');
+        
+        try {
+          // 讀取元資料
+          const getCommand = new GetObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: `folders/${folderId}/metadata.json`
+          });
+          const getResponse = await s3Client.send(getCommand);
+          const metadata = JSON.parse(await getResponse.Body.transformToString());
+          folders.push(metadata);
+        } catch (error) {
+          console.error(`讀取 ${folderId} 元資料失敗:`, error);
+        }
+      }
+    }
+
+    // 也檢查 Contents
     if (response.Contents) {
+      console.log('找到 Contents:', response.Contents.length);
       for (const item of response.Contents) {
         if (item.Key.endsWith('/metadata.json')) {
           try {
@@ -49,17 +76,22 @@ export async function listFolders() {
             });
             const getResponse = await s3Client.send(getCommand);
             const metadata = JSON.parse(await getResponse.Body.transformToString());
-            folders.push(metadata);
+            
+            // 避免重複
+            if (!folders.find(f => f.folderId === metadata.folderId)) {
+              folders.push(metadata);
+            }
           } catch (error) {
-            console.error(`Error reading metadata for ${item.Key}:`, error);
+            console.error(`讀取元資料失敗 ${item.Key}:`, error);
           }
         }
       }
     }
 
+    console.log(`總共找到 ${folders.length} 個資料夾`);
     return folders;
   } catch (error) {
-    console.error('Error listing folders:', error);
+    console.error('列出資料夾錯誤:', error);
     throw error;
   }
 }
